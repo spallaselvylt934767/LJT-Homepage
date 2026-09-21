@@ -1,4 +1,4 @@
-name: Deploy to GitHub Pages
+name: Build and deploy to GitHub Pages
 
 on:
   push:
@@ -9,7 +9,6 @@ permissions:
   contents: read
   pages: write
   id-token: write
-  administration: write
 
 concurrency:
   group: "pages"
@@ -18,14 +17,20 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      pages-enabled: ${{ steps.setup-pages.outcome == 'success' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Succeeds only when GitHub Pages is enabled with "GitHub Actions" as
+      # the publishing source. Until then the site is still built below so the
+      # content can be validated, and deployment starts automatically as soon
+      # as Pages is switched on in the repository settings.
       - name: Setup Pages
+        id: setup-pages
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
+        continue-on-error: true
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -39,9 +44,11 @@ jobs:
           JEKYLL_ENV: production
 
       - name: Upload artifact
+        if: steps.setup-pages.outcome == 'success'
         uses: actions/upload-pages-artifact@v3
 
   deploy:
+    if: needs.build.outputs.pages-enabled == 'true'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
